@@ -82,3 +82,4 @@ npx vercel
 - **Computer Vision**: TensorFlow.js, `@tensorflow-models/pose-detection` (MoveNet SinglePose Lightning)
 - **Audio Engine**: Web Audio API Synthesizer
 - **Backend / Serverless**: Vercel Serverless Functions (`/api/coach.js`)
+# sports-talent-ai
