@@ -42,11 +42,15 @@ export function LiveAssessment({
     poseDetected,
     errorMessage,
     currentVelocity,
+    peakVelocity,
     totalDisplacement,
+    leftDisplacement,
+    rightDisplacement,
     repsCount,
     startCamera,
     stopCamera,
     resetMetrics,
+    getTelemetrySummary,
   } = usePoseDetection({
     isTestingActive: testPhase === 'active',
     isSimulation,
@@ -124,7 +128,20 @@ export function LiveAssessment({
     }
 
     setTimeout(() => {
-      const finalResult = calculateAgilityScore(totalDisplacement, 10, repsCount);
+      const telemetry = getTelemetrySummary ? getTelemetrySummary() : {
+        totalDisplacement,
+        reps: repsCount,
+        leftDisplacement,
+        rightDisplacement,
+        peakVelocity,
+      };
+
+      console.log('[KhelAI Telemetry Complete]', telemetry);
+
+      const finalResult = calculateAgilityScore(totalDisplacement, 10, repsCount, telemetry);
+
+      console.log('[KhelAI Dynamic Pillars]', finalResult.metrics, 'Score:', finalResult.score);
+
       onComplete({
         sportId: 'badminton',
         sportName: 'Badminton',
@@ -134,13 +151,17 @@ export function LiveAssessment({
         metrics: finalResult.metrics,
         totalDisplacementPx: finalResult.totalDisplacementPx,
         reps: repsCount,
+        leftDisplacementPx: finalResult.leftDisplacementPx,
+        rightDisplacementPx: finalResult.rightDisplacementPx,
+        peakVelocityPx: finalResult.peakVelocityPx,
+        symmetryRatio: finalResult.symmetryRatio,
         testDuration: 10,
         reactionTimeMs: 228,
         isDemo: isSimulation,
         timestamp: new Date().toISOString(),
       });
     }, 800);
-  }, [totalDisplacement, repsCount, audio, onComplete, isSimulation]);
+  }, [totalDisplacement, repsCount, leftDisplacement, rightDisplacement, peakVelocity, getTelemetrySummary, audio, onComplete, isSimulation]);
 
   // Instant Skip with Sample Data (Pitch Fail-safe button)
   const handleInstantSkip = () => {

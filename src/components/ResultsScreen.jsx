@@ -198,13 +198,13 @@ export function ResultsScreen({
             <div className="flex justify-between items-center text-xs mb-1.5">
               <span className="text-slate-400 font-medium">Lateral Velocity</span>
               <span className="font-mono font-bold text-emerald-400">
-                {metrics.lateralSpeed || score}%
+                {metrics?.lateralSpeed ?? score}%
               </span>
             </div>
             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-2">
               <div
-                className="bg-emerald-500 h-full rounded-full"
-                style={{ width: `${metrics.lateralSpeed || score}%` }}
+                className="bg-emerald-500 h-full rounded-full transition-all duration-700"
+                style={{ width: `${Math.max(5, metrics?.lateralSpeed ?? score)}%` }}
               ></div>
             </div>
             <p className="text-[11px] text-slate-400 leading-tight">
@@ -217,13 +217,13 @@ export function ResultsScreen({
             <div className="flex justify-between items-center text-xs mb-1.5">
               <span className="text-slate-400 font-medium">Cadence / Turns</span>
               <span className="font-mono font-bold text-cyan-400">
-                {metrics.frequencyReps || 80}%
+                {metrics?.frequencyReps ?? 0}%
               </span>
             </div>
             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-2">
               <div
-                className="bg-cyan-500 h-full rounded-full"
-                style={{ width: `${metrics.frequencyReps || 80}%` }}
+                className="bg-cyan-500 h-full rounded-full transition-all duration-700"
+                style={{ width: `${Math.max(5, metrics?.frequencyReps ?? 0)}%` }}
               ></div>
             </div>
             <p className="text-[11px] text-slate-400 leading-tight">
@@ -236,13 +236,13 @@ export function ResultsScreen({
             <div className="flex justify-between items-center text-xs mb-1.5">
               <span className="text-slate-400 font-medium">Kinetic Consistency</span>
               <span className="font-mono font-bold text-amber-400">
-                {metrics.movementConsistency || 85}%
+                {metrics?.movementConsistency ?? 0}%
               </span>
             </div>
             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-2">
               <div
-                className="bg-amber-400 h-full rounded-full"
-                style={{ width: `${metrics.movementConsistency || 85}%` }}
+                className="bg-amber-400 h-full rounded-full transition-all duration-700"
+                style={{ width: `${Math.max(5, metrics?.movementConsistency ?? 0)}%` }}
               ></div>
             </div>
             <p className="text-[11px] text-slate-400 leading-tight">
@@ -255,13 +255,13 @@ export function ResultsScreen({
             <div className="flex justify-between items-center text-xs mb-1.5">
               <span className="text-slate-400 font-medium">Explosiveness</span>
               <span className="font-mono font-bold text-purple-400">
-                {metrics.explosivenessIndex || score}%
+                {metrics?.explosivenessIndex ?? score}%
               </span>
             </div>
             <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mb-2">
               <div
-                className="bg-purple-500 h-full rounded-full"
-                style={{ width: `${metrics.explosivenessIndex || score}%` }}
+                className="bg-purple-500 h-full rounded-full transition-all duration-700"
+                style={{ width: `${Math.max(5, metrics?.explosivenessIndex ?? score)}%` }}
               ></div>
             </div>
             <p className="text-[11px] text-slate-400 leading-tight">

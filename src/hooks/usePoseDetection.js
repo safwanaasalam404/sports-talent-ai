@@ -31,7 +31,10 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
   const [errorMessage, setErrorMessage] = useState(null);
   const [poseDetected, setPoseDetected] = useState(false);
   const [currentVelocity, setCurrentVelocity] = useState(0);
+  const [peakVelocity, setPeakVelocity] = useState(0);
   const [totalDisplacement, setTotalDisplacement] = useState(0);
+  const [leftDisplacement, setLeftDisplacement] = useState(0);
+  const [rightDisplacement, setRightDisplacement] = useState(0);
   const [repsCount, setRepsCount] = useState(0);
 
   const videoRef = useRef(null);
@@ -40,6 +43,12 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
   const prevMidpointRef = useRef(null);
   const lastDirectionRef = useRef(0); // -1 for left, 1 for right
   const simulationTimeRef = useRef(0);
+
+  // Telemetry refs for accumulation during test window
+  const leftDisplacementRef = useRef(0);
+  const rightDisplacementRef = useRef(0);
+  const peakVelocityRef = useRef(0);
+  const totalDisplacementRef = useRef(0);
 
   // 1. Initialize TensorFlow Backend & MoveNet Model
   useEffect(() => {
@@ -139,7 +148,14 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
   const resetMetrics = useCallback(() => {
     prevMidpointRef.current = null;
     lastDirectionRef.current = 0;
+    leftDisplacementRef.current = 0;
+    rightDisplacementRef.current = 0;
+    peakVelocityRef.current = 0;
+    totalDisplacementRef.current = 0;
     setTotalDisplacement(0);
+    setLeftDisplacement(0);
+    setRightDisplacement(0);
+    setPeakVelocity(0);
     setRepsCount(0);
     setCurrentVelocity(0);
   }, []);
@@ -292,6 +308,20 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
             if (mid && prevMidpointRef.current) {
               const deltaX = Math.abs(mid.x - prevMidpointRef.current.x);
               const dir = mid.x - prevMidpointRef.current.x > 0 ? 1 : -1;
+              const instantVel = Math.round(deltaX * 30);
+
+              if (instantVel > peakVelocityRef.current) {
+                peakVelocityRef.current = instantVel;
+                setPeakVelocity(instantVel);
+              }
+
+              if (dir === 1) {
+                rightDisplacementRef.current += deltaX;
+                setRightDisplacement(Math.round(rightDisplacementRef.current));
+              } else {
+                leftDisplacementRef.current += deltaX;
+                setLeftDisplacement(Math.round(leftDisplacementRef.current));
+              }
 
               // Check direction reversal (shuffle rep)
               if (lastDirectionRef.current !== 0 && dir !== lastDirectionRef.current && deltaX > 1.5) {
@@ -301,13 +331,14 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
 
               setTotalDisplacement((prev) => {
                 const next = prev + deltaX;
+                totalDisplacementRef.current = next;
                 if (onFrameMetric) {
                   onFrameMetric({ deltaX, totalDisplacement: next, currentX: mid.x });
                 }
                 return next;
               });
 
-              setCurrentVelocity(Math.round(deltaX * 30));
+              setCurrentVelocity(instantVel);
             }
             prevMidpointRef.current = mid;
           }
@@ -356,6 +387,22 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
                 // Filter out small jitter (< 1.2px) and massive frame teleportation skips (> 80px)
                 if (deltaX > 1.2 && deltaX < 80) {
                   const dir = mid.x - prevMidpointRef.current.x > 0 ? 1 : -1;
+                  const instantVel = Math.round(deltaX * 30);
+
+                  // Update peak velocity
+                  if (instantVel > peakVelocityRef.current) {
+                    peakVelocityRef.current = instantVel;
+                    setPeakVelocity(instantVel);
+                  }
+
+                  // Update directional displacement
+                  if (dir === 1) {
+                    rightDisplacementRef.current += deltaX;
+                    setRightDisplacement(Math.round(rightDisplacementRef.current));
+                  } else {
+                    leftDisplacementRef.current += deltaX;
+                    setLeftDisplacement(Math.round(leftDisplacementRef.current));
+                  }
 
                   // Direction change detection (shuffle rep)
                   if (lastDirectionRef.current !== 0 && dir !== lastDirectionRef.current && deltaX > 2.0) {
@@ -365,13 +412,14 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
 
                   setTotalDisplacement((prev) => {
                     const next = prev + deltaX;
+                    totalDisplacementRef.current = next;
                     if (onFrameMetric) {
                       onFrameMetric({ deltaX, totalDisplacement: next, currentX: mid.x });
                     }
                     return next;
                   });
 
-                  setCurrentVelocity(Math.round(deltaX * 30));
+                  setCurrentVelocity(instantVel);
                 }
               }
               prevMidpointRef.current = mid;
@@ -398,6 +446,16 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
     };
   }, [detector, cameraActive, isSimulation, isTestingActive, drawPose, onFrameMetric]);
 
+  const getTelemetrySummary = useCallback(() => {
+    return {
+      totalDisplacement: totalDisplacementRef.current || totalDisplacement,
+      reps: repsCount,
+      leftDisplacement: leftDisplacementRef.current,
+      rightDisplacement: rightDisplacementRef.current,
+      peakVelocity: peakVelocityRef.current,
+    };
+  }, [totalDisplacement, repsCount]);
+
   return {
     videoRef,
     canvasRef,
@@ -406,10 +464,14 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
     poseDetected,
     errorMessage,
     currentVelocity,
+    peakVelocity,
     totalDisplacement,
+    leftDisplacement,
+    rightDisplacement,
     repsCount,
     startCamera,
     stopCamera,
     resetMetrics,
+    getTelemetrySummary,
   };
 }
