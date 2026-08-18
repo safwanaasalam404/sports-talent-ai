@@ -26,51 +26,64 @@ export const KEYPOINTS = {
 };
 
 /**
- * Computes midpoint X coordinate from ankles (or hips fallback if ankles not confident)
+ * Computes midpoint X coordinate from ankles (or hips fallback if ankles not confident).
+ * Automatically scales normalized [0, 1] coordinates to pixel dimensions if width/height are provided.
  */
-export function getTrackingMidpoint(keypoints, minScore = 0.3) {
+export function getTrackingMidpoint(keypoints, minScore = 0.3, width = null, height = null) {
+  if (!keypoints || keypoints.length === 0) return null;
+
   const leftAnkle = keypoints[KEYPOINTS.LEFT_ANKLE];
   const rightAnkle = keypoints[KEYPOINTS.RIGHT_ANKLE];
   const leftHip = keypoints[KEYPOINTS.LEFT_HIP];
   const rightHip = keypoints[KEYPOINTS.RIGHT_HIP];
 
+  let rawX = null;
+  let rawY = null;
+  let type = 'none';
+  let confidence = 0;
+
   // Priority 1: Ankle midpoint if both detected with sufficient confidence
   if (leftAnkle?.score >= minScore && rightAnkle?.score >= minScore) {
-    return {
-      x: (leftAnkle.x + rightAnkle.x) / 2,
-      y: (leftAnkle.y + rightAnkle.y) / 2,
-      type: 'ankles',
-      confidence: (leftAnkle.score + rightAnkle.score) / 2,
-    };
+    rawX = (leftAnkle.x + rightAnkle.x) / 2;
+    rawY = (leftAnkle.y + rightAnkle.y) / 2;
+    type = 'ankles';
+    confidence = (leftAnkle.score + rightAnkle.score) / 2;
+  } else if (leftHip?.score >= minScore && rightHip?.score >= minScore) {
+    // Priority 2: Hip midpoint fallback
+    rawX = (leftHip.x + rightHip.x) / 2;
+    rawY = (leftHip.y + rightHip.y) / 2;
+    type = 'hips';
+    confidence = (leftHip.score + rightHip.score) / 2;
+  } else {
+    // Priority 3: Single confident ankle or hip
+    const validPoints = [leftAnkle, rightAnkle, leftHip, rightHip].filter(
+      (kp) => kp && kp.score >= minScore
+    );
+
+    if (validPoints.length > 0) {
+      rawX = validPoints.reduce((acc, kp) => acc + kp.x, 0) / validPoints.length;
+      rawY = validPoints.reduce((acc, kp) => acc + kp.y, 0) / validPoints.length;
+      type = 'mixed';
+      confidence = validPoints[0].score;
+    }
   }
 
-  // Priority 2: Hip midpoint fallback
-  if (leftHip?.score >= minScore && rightHip?.score >= minScore) {
-    return {
-      x: (leftHip.x + rightHip.x) / 2,
-      y: (leftHip.y + rightHip.y) / 2,
-      type: 'hips',
-      confidence: (leftHip.score + rightHip.score) / 2,
-    };
-  }
+  if (rawX === null || rawY === null) return null;
 
-  // Priority 3: Single confident ankle or hip
-  const validPoints = [leftAnkle, rightAnkle, leftHip, rightHip].filter(
-    (kp) => kp && kp.score >= minScore
-  );
+  // Check if coordinates are in normalized [0, 1] range (or <= 1.05) and scale to canvas pixels
+  const isNormalized = rawX <= 1.05 && rawY <= 1.05 && width && width > 1;
+  const x = isNormalized ? rawX * width : rawX;
+  const y = isNormalized ? rawY * (height || width * 0.75) : rawY;
 
-  if (validPoints.length > 0) {
-    const avgX = validPoints.reduce((acc, kp) => acc + kp.x, 0) / validPoints.length;
-    const avgY = validPoints.reduce((acc, kp) => acc + kp.y, 0) / validPoints.length;
-    return {
-      x: avgX,
-      y: avgY,
-      type: 'mixed',
-      confidence: validPoints[0].score,
-    };
-  }
-
-  return null;
+  return {
+    x,
+    y,
+    rawX,
+    rawY,
+    isNormalized: Boolean(isNormalized),
+    type,
+    confidence,
+  };
 }
 
 /**

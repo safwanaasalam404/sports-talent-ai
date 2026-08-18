@@ -150,6 +150,17 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
 
     if (!keypoints || keypoints.length === 0) return;
 
+    // Scale keypoints to pixel dimensions if MoveNet returns normalized [0, 1] range
+    const pixelKeypoints = keypoints.map((kp) => {
+      if (!kp) return kp;
+      const isNorm = kp.x <= 1.05 && kp.y <= 1.05 && width > 1;
+      return {
+        ...kp,
+        x: isNorm ? kp.x * width : kp.x,
+        y: isNorm ? kp.y * height : kp.y,
+      };
+    });
+
     // Draw Skeleton Lines
     ctx.lineWidth = 3;
     ctx.strokeStyle = isSim ? '#06b6d4' : '#10b981'; // Cyan for sim, emerald for live
@@ -157,8 +168,8 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
     ctx.shadowBlur = 10;
 
     SKELETON_CONNECTIONS.forEach(([i, j]) => {
-      const kp1 = keypoints[i];
-      const kp2 = keypoints[j];
+      const kp1 = pixelKeypoints[i];
+      const kp2 = pixelKeypoints[j];
       if (kp1 && kp2 && (kp1.score || 1) > 0.3 && (kp2.score || 1) > 0.3) {
         ctx.beginPath();
         // Mirror x if it's camera feed
@@ -171,7 +182,7 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
     });
 
     // Draw Keypoint Nodes
-    keypoints.forEach((kp, idx) => {
+    pixelKeypoints.forEach((kp, idx) => {
       if (!kp || (kp.score || 1) < 0.3) return;
       const x = isSim ? kp.x : width - kp.x;
       const y = kp.y;
@@ -201,7 +212,7 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
     });
 
     // Draw Tracking Midpoint (Center of Lateral Mass)
-    const mid = getTrackingMidpoint(keypoints);
+    const mid = getTrackingMidpoint(keypoints, 0.3, width, height);
     if (mid) {
       const midX = isSim ? mid.x : width - mid.x;
       ctx.beginPath();
@@ -277,7 +288,7 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
 
           // Process Metrics if active
           if (isTestingActive) {
-            const mid = getTrackingMidpoint(simKeypoints);
+            const mid = getTrackingMidpoint(simKeypoints, 0.3, width, height);
             if (mid && prevMidpointRef.current) {
               const deltaX = Math.abs(mid.x - prevMidpointRef.current.x);
               const dir = mid.x - prevMidpointRef.current.x > 0 ? 1 : -1;
@@ -325,16 +336,29 @@ export function usePoseDetection({ onFrameMetric, isTestingActive = false, isSim
             drawPose(keypoints, ctx, width, height, false);
 
             if (isTestingActive) {
-              const mid = getTrackingMidpoint(keypoints, 0.28);
+              // Pass width and height to scale normalized [0, 1] MoveNet coordinates to canvas pixels
+              const mid = getTrackingMidpoint(keypoints, 0.28, width, height);
+
+              if (mid) {
+                // Log raw and scaled mid.x for verification
+                console.log(
+                  `[KhelAI Pose] raw mid.x: ${mid.rawX !== null ? mid.rawX.toFixed(4) : 'null'} | scaled mid.x: ${mid.x.toFixed(2)}px (canvas width: ${width}px, isNorm: ${mid.isNormalized}) | tracked: ${mid.type}`
+                );
+              }
+
               if (mid && prevMidpointRef.current) {
                 const deltaX = Math.abs(mid.x - prevMidpointRef.current.x);
 
-                // Filter out small jitter (< 1.2px)
+                console.log(
+                  `[KhelAI Motion] deltaX: ${deltaX.toFixed(2)}px (prev: ${prevMidpointRef.current.x.toFixed(2)} -> curr: ${mid.x.toFixed(2)})`
+                );
+
+                // Filter out small jitter (< 1.2px) and massive frame teleportation skips (> 80px)
                 if (deltaX > 1.2 && deltaX < 80) {
                   const dir = mid.x - prevMidpointRef.current.x > 0 ? 1 : -1;
 
-                  // Direction change detection
-                  if (lastDirectionRef.current !== 0 && dir !== lastDirectionRef.current && deltaX > 2.5) {
+                  // Direction change detection (shuffle rep)
+                  if (lastDirectionRef.current !== 0 && dir !== lastDirectionRef.current && deltaX > 2.0) {
                     setRepsCount((r) => r + 1);
                   }
                   lastDirectionRef.current = dir;
